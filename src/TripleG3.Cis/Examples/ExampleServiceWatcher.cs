@@ -3,15 +3,15 @@ namespace TripleG3.Cis.Examples;
 /// <summary>
 /// Writes example service state changes to the console.
 /// </summary>
-public class ExampleServiceWatcher
+public sealed class ExampleServiceWatcher
 {
-    private readonly ExampleService exampleService;
+    private readonly IExampleService exampleService;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ExampleServiceWatcher"/> class.
     /// </summary>
     /// <param name="exampleService">The example service to observe.</param>
-    public ExampleServiceWatcher(ExampleService exampleService)
+    public ExampleServiceWatcher(IExampleService exampleService)
     {
         this.exampleService = exampleService;
         this.exampleService.StateChanged += OnStateChanged;

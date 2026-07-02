@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/TripleG3.Cis.ConsoleTest/TripleG3.Cis.ConsoleTest.csproj" />
+    <Project Path="src/TripleG3.Cis.Tests/TripleG3.Cis.Tests.csproj" />
     <Project Path="src/TripleG3.Cis/TripleG3.Cis.csproj" />
   </Folder>
 </Solution>

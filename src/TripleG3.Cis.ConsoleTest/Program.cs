@@ -1,11 +1,12 @@
 ﻿using TripleG3.Cis.Examples;
-IExampleService exampleService = new ExampleService();
-_ =new ExampleServiceWatcher((ExampleService)exampleService);
-await exampleService.SetNextStepAsync(CancellationToken.None);
+var exampleApi = new ExampleApi();
+var exampleService = new ExampleService(exampleApi);
+_ = new ExampleServiceWatcher(exampleService);
 
+var cancellationTokenSource = new CancellationTokenSource();
 do 
 {
-    await exampleService.SetNextStepAsync(CancellationToken.None);
+    await exampleService.SetNextStepAsync(cancellationTokenSource.Token);
 } while (exampleService.State.Value != ExampleServiceSteps.Complete);
 
 Console.ReadLine();
