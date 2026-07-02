@@ -42,6 +42,36 @@ public class StateServiceTests
     }
 
     [Fact]
+    public async Task SetAsync_WhenStateChangedSubscriberThrows_DoesNotFailTransitionOrSkipOtherSubscribers()
+    {
+        var service = new TestStateService<int>();
+        var factoryInvoked = false;
+        var observedStates = new List<State<int>>();
+
+        service.StateChanged += (_, _) => throw new InvalidOperationException("Observer failed.");
+        service.StateChanged += (_, state) => observedStates.Add(state);
+
+        var result = await service.SetAsync(_ =>
+        {
+            factoryInvoked = true;
+            return new ValueTask<int>(42);
+        }, CancellationToken.None);
+
+        Assert.True(factoryInvoked);
+        Assert.Equal(StateStatus.Ready, result.Status);
+        Assert.Equal(42, result.Value);
+        Assert.Equal(result, service.State);
+        Assert.Collection(
+            observedStates,
+            state => Assert.Equal(StateStatus.Busy, state.Status),
+            state =>
+            {
+                Assert.Equal(StateStatus.Ready, state.Status);
+                Assert.Equal(42, state.Value);
+            });
+    }
+
+    [Fact]
     public async Task SetAsync_WhenTransitionsOverlap_RunsOneFactoryAtATime()
     {
         var service = new TestStateService<int>();

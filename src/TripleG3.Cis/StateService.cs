@@ -10,7 +10,7 @@ public abstract class StateService<T> : IStateService<T>
     private State<T> state = State<T>.Empty;
 
     /// <summary>
-    /// Occurs after the state value, status, or error message changes.
+    /// Occurs after the state value, status, or error message changes. Subscriber exceptions are isolated from state transitions.
     /// </summary>
     public event EventHandler<State<T>> StateChanged = delegate { };
     
@@ -24,7 +24,21 @@ public abstract class StateService<T> : IStateService<T>
         {
             if (state.Equals(value)) return;
             state = value;
-            StateChanged.Invoke(this, state);
+            RaiseStateChanged(state);
+        }
+    }
+
+    private void RaiseStateChanged(State<T> value)
+    {
+        foreach (EventHandler<State<T>> handler in StateChanged.GetInvocationList().Cast<EventHandler<State<T>>>())
+        {
+            try
+            {
+                handler.Invoke(this, value);
+            }
+            catch
+            {
+            }
         }
     }
 
