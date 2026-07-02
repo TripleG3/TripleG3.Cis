@@ -76,6 +76,55 @@ public class StateServiceTests
     }
 
     [Fact]
+    public async Task SetAsync_WhenWaitingTransitionIsCanceled_KeepsFollowingTransitionSerialized()
+    {
+        var service = new TestStateService<int>();
+        var firstStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var firstMayFinish = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var thirdStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var secondFactoryInvoked = false;
+
+        var firstTask = service.SetAsync(async _ =>
+        {
+            firstStarted.SetResult();
+            await firstMayFinish.Task;
+            return 1;
+        }, CancellationToken.None).AsTask();
+
+        await firstStarted.Task;
+
+        using var cancellationTokenSource = new CancellationTokenSource();
+        var secondTask = service.SetAsync(_ =>
+        {
+            secondFactoryInvoked = true;
+            return new ValueTask<int>(2);
+        }, cancellationTokenSource.Token).AsTask();
+
+        cancellationTokenSource.Cancel();
+
+        var secondResult = await secondTask;
+
+        Assert.False(secondFactoryInvoked);
+        Assert.Equal(StateStatus.Error, secondResult.Status);
+
+        var thirdTask = service.SetAsync(_ =>
+        {
+            thirdStarted.SetResult();
+            return new ValueTask<int>(3);
+        }, CancellationToken.None).AsTask();
+
+        var thirdRanBeforeFirstFinished = await Task.WhenAny(thirdStarted.Task, Task.Delay(100)) == thirdStarted.Task;
+        Assert.False(thirdRanBeforeFirstFinished);
+
+        firstMayFinish.SetResult();
+
+        Assert.Equal(1, (await firstTask).Value);
+        await thirdStarted.Task;
+        Assert.Equal(3, (await thirdTask).Value);
+        Assert.Equal(3, service.State.Value);
+    }
+
+    [Fact]
     public async Task SetAsync_WhenCancellationTokenIsAlreadyCanceled_ReturnsErrorStateWithoutInvokingFactory()
     {
         var service = new TestStateService<int>();

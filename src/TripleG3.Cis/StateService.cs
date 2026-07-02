@@ -6,7 +6,7 @@ namespace TripleG3.Cis;
 /// <typeparam name="T">The type of value held by the state.</typeparam>
 public abstract class StateService<T> : IStateService<T>
 {
-    private SemaphoreSlim semaphoreSlim = new(1, 1);
+    private readonly SemaphoreSlim semaphoreSlim = new(1, 1);
     private State<T> state = State<T>.Empty;
 
     /// <summary>
@@ -43,13 +43,11 @@ public abstract class StateService<T> : IStateService<T>
         catch (OperationCanceledException ex) when (ex.CancellationToken == cancellationToken)
         {
             State = State with { Status = StateStatus.Error, ErrorMessage = "Operation canceled." };
-            semaphoreSlim = new SemaphoreSlim(1, 1); // Reset the semaphore to allow future transitions
             return State;
         }
         catch (ObjectDisposedException ex) when (ex.ObjectName == nameof(SemaphoreSlim))
         {
             State = State with { Status = StateStatus.Error, ErrorMessage = ex.Message };
-            semaphoreSlim = new SemaphoreSlim(1, 1); // Reset the semaphore to allow future transitions
             return State;
         }
         
