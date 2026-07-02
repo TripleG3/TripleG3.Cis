@@ -1,5 +1,7 @@
 # TripleG3.Cis
 
+## Asynchronously Request Change, Read Immutable State, Listen For State Changes - Clean, Simple, Safe
+
 Command Immutable State Pattern: a tiny .NET library for services that need one clear state snapshot, one update pipeline, and simple change notifications.
 
 Think of it as a calm little command center for async work: call a method, the service becomes `Busy`, it produces a value, then it becomes `Ready`. If something goes sideways, the state lands on `Error` with a message.
