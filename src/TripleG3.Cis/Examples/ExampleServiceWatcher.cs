@@ -1,8 +1,16 @@
 namespace TripleG3.Cis.Examples;
 
+/// <summary>
+/// Writes example service state changes to the console.
+/// </summary>
 public class ExampleServiceWatcher
 {
     private readonly ExampleService exampleService;
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="ExampleServiceWatcher"/> class.
+    /// </summary>
+    /// <param name="exampleService">The example service to observe.</param>
     public ExampleServiceWatcher(ExampleService exampleService)
     {
         this.exampleService = exampleService;
@@ -12,48 +20,7 @@ public class ExampleServiceWatcher
     private void OnStateChanged(object? sender, State<ExampleServiceSteps> state)
     {
         Console.WriteLine($"State changed: {state.Status} - {state.Value}");
-        switch (state.Status)
-        {
-            case StateStatus.Busy:
-                switch (state.Value)
-                {
-                    case ExampleServiceSteps.None:
-                        Console.WriteLine("Step1 step has started.");
-                        break;
-                    case ExampleServiceSteps.Step1:
-                        Console.WriteLine("Step2 has started.");
-                        break;
-                    case ExampleServiceSteps.Step2:
-                        Console.WriteLine("Step3 has started.");
-                        break;
-                    case ExampleServiceSteps.Step3:
-                        Console.WriteLine("Step4 has started.");
-                        break;
-                    case ExampleServiceSteps.Complete:
-                        Console.WriteLine("Service has completed all steps.");
-                        break;
-                }
-                break;
-            case StateStatus.Error:
-                Console.WriteLine($"Service encountered an error: {state.ErrorMessage}");
-                break;
-            case StateStatus.Ready:
-                switch (state.Value)
-                {
-                    case ExampleServiceSteps.Step1:
-                        Console.WriteLine("Service has ended Step1.");
-                        break;
-                    case ExampleServiceSteps.Step2:
-                        Console.WriteLine("Service has ended Step2.");
-                        break;
-                    case ExampleServiceSteps.Step3:
-                        Console.WriteLine("Service has ended Step3.");
-                        break;
-                    case ExampleServiceSteps.Complete:
-                        Console.WriteLine("Service has completed all steps.");
-                        break;
-                }
-                break;
-        }
+        Console.WriteLine("-----------------------------------------------------");
+        Task.Delay(1000).Wait(); // Simulate some work
     }
 }
