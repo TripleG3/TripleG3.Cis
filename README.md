@@ -37,7 +37,7 @@ No mystery ceremony. Just immutable snapshots and predictable transitions.
 
 | Type | What It Does | When To Use It |
 | --- | --- | --- |
-| `State<T>` | Immutable snapshot with `Value`, `Status`, and `ErrorMessage`. | Return or inspect the latest service state. |
+| `State<T>` | Immutable snapshot with nullable `Value`, `Status`, and `ErrorMessage`. | Return or inspect the latest service state. |
 | `StateStatus` | Status enum: `None`, `Busy`, `Ready`, `Error`. | Decide what the UI, caller, or workflow should do next. |
 | `StateValueFactory<T>` | Async delegate that creates the next state value. | Wrap the actual work used by `SetAsync`. |
 | `IStateService<T>` | Contract for observable state services. | Depend on state behavior without tying callers to a concrete class. |
@@ -50,7 +50,7 @@ No mystery ceremony. Just immutable snapshots and predictable transitions.
 
 `StateStatus.Busy` means a transition is running.
 
-`StateStatus.Ready` means the latest value was produced successfully.
+`StateStatus.Ready` means the latest value was produced successfully. `State<T>.Value` is nullable because empty and failed states may not have a reference-type value.
 
 `StateStatus.Error` means the latest transition threw an exception. Check `State<T>.ErrorMessage` for the message.
 
@@ -65,16 +65,16 @@ public sealed record DownloadInfo(string FileName, int PercentComplete);
 
 public sealed class DownloadStateService : StateService<DownloadInfo>
 {
-	public ValueTask<State<DownloadInfo>> RefreshAsync(CancellationToken cancellationToken)
-	{
-		return SetAsync(GetDownloadInfoAsync, cancellationToken);
-	}
+    public ValueTask<State<DownloadInfo>> RefreshAsync(CancellationToken cancellationToken)
+    {
+        return SetAsync(GetDownloadInfoAsync, cancellationToken);
+    }
 
-	private static async ValueTask<DownloadInfo> GetDownloadInfoAsync(CancellationToken cancellationToken)
-	{
-		await Task.Delay(250, cancellationToken);
-		return new DownloadInfo("Guide.pdf", 100);
-	}
+    private static async ValueTask<DownloadInfo> GetDownloadInfoAsync(CancellationToken cancellationToken)
+    {
+        await Task.Delay(250, cancellationToken);
+        return new DownloadInfo("Guide.pdf", 100);
+    }
 }
 ```
 
@@ -85,14 +85,14 @@ var service = new DownloadStateService();
 
 service.StateChanged += (_, state) =>
 {
-	Console.WriteLine($"{state.Status}: {state.Value?.FileName} {state.Value?.PercentComplete}%");
+    Console.WriteLine($"{state.Status}: {state.Value?.FileName} {state.Value?.PercentComplete}%");
 };
 
 State<DownloadInfo> result = await service.RefreshAsync(CancellationToken.None);
 
-if (result.Status == StateStatus.Ready)
+if (result is { Status: StateStatus.Ready, Value: { } downloadInfo })
 {
-	Console.WriteLine($"Done: {result.Value.FileName}");
+    Console.WriteLine($"Done: {downloadInfo.FileName}");
 }
 ```
 
@@ -164,13 +164,14 @@ State changed: Ready - Complete
 IStateService<string> service = IStateService<string>.Empty;
 
 State<string> state = await service.SetAsync(
-	cancellationToken => new ValueTask<string>("This value is ignored."),
-	CancellationToken.None);
+    cancellationToken => new ValueTask<string>("This value is ignored."),
+    CancellationToken.None);
 
 Console.WriteLine(state.Status); // None
+Console.WriteLine(state.Value is null); // True
 ```
 
-The empty service never invokes the factory and always returns `State<T>.Empty`.
+The empty service never invokes the factory and always returns `State<T>.Empty`, whose `Value` is `null` for reference-type state values.
 
 ## Tips
 
@@ -198,17 +199,16 @@ AI assistants working with this repository should follow these rules:
 ```text
 src/
   TripleG3.Cis/
-	Delegates.cs              StateValueFactory<T>
-	IStateService.cs          IStateService<T>
-	State.cs                  State<T>
-	StateService.cs           StateService<T>
-	StateStatus.cs            StateStatus
-	Examples/
-	  ExampleApi.cs           ExampleApi
-	  ExampleService.cs       ExampleService
-	  ExampleServiceSteps.cs  ExampleServiceSteps
-	  ExampleServiceWatcher.cs
-	  IExampleApi.cs          IExampleApi
-	  IExampleService.cs
+        Delegates.cs              StateValueFactory<T>
+        IStateService.cs          IStateService<T>
+        State.cs                  State<T>
+        StateService.cs           StateService<T>
+        StateStatus.cs            StateStatus
+        Examples/
+            ExampleApi.cs           ExampleApi
+            ExampleService.cs       ExampleService
+            ExampleServiceSteps.cs  ExampleServiceSteps
+            ExampleServiceWatcher.cs
+            IExampleApi.cs          IExampleApi
+            IExampleService.cs
 ```
-
