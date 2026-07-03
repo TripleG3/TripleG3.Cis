@@ -21,6 +21,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="..\TripleG3.Cis\Examples\**\*.cs" Link="Examples\%(RecursiveDir)%(Filename)%(Extension)" />
     <ProjectReference Include="..\TripleG3.Cis\TripleG3.Cis.csproj" />
   </ItemGroup>
 

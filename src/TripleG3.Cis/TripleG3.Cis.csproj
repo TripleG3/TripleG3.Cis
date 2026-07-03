@@ -27,6 +27,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="Examples\**\*.cs" />
     <None Include="..\..\README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
 

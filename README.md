@@ -98,7 +98,7 @@ if (result is { Status: StateStatus.Ready, Value: { } downloadInfo })
 
 ## Examples Details
 
-The `src\TripleG3.Cis\Examples` path contains a small console-friendly walkthrough. These types are examples, not required infrastructure for your own services.
+The `src\TripleG3.Cis\Examples` path contains a small console-friendly walkthrough. These types are compiled by the console sample and tests, not by the packaged library assembly.
 
 | Example Type | What It Shows | Where It Fits |
 | --- | --- | --- |
