@@ -21,6 +21,5 @@ public sealed class ExampleServiceWatcher
     {
         Console.WriteLine($"State changed: {state.Status} - {state.Value}");
         Console.WriteLine("-----------------------------------------------------");
-        Task.Delay(1000).Wait(); // Simulate some work
     }
 }
