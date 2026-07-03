@@ -181,19 +181,6 @@ The empty service never invokes the factory and always returns `State<T>.Empty`,
 - Subscribe to `StateChanged` when a UI, console, or workflow needs to react.
 - Inspect `StateStatus.Error` and `ErrorMessage` when a command fails.
 
-## AI Model Instructions
-
-AI assistants working with this repository should follow these rules:
-
-1. Treat `State<T>` as immutable. Use `with` expressions for changes inside library code.
-2. Build new services by deriving from `StateService<T>` and exposing clear command methods.
-3. Use `SetAsync(StateValueFactory<T>, CancellationToken)` for state transitions. Do not bypass the base class transition flow.
-4. Depend on `IStateService<T>` when writing consumers that only need current state and change notifications.
-5. Use `StateChanged` for observation, not polling loops.
-6. Keep example code simple, async, and cancellation-token friendly.
-7. Preserve the namespaces `TripleG3.Cis` and `TripleG3.Cis.Examples` unless the user explicitly asks for a namespace change.
-8. Validate library changes with `dotnet build TripleG3.Cis.slnx` from the repository root.
-
 ## Project Layout
 
 ```text
