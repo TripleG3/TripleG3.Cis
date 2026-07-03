@@ -42,6 +42,25 @@ public class StateServiceTests
     }
 
     [Fact]
+    public async Task SetAsync_WhenFactoryIsCanceled_ReturnsOperationCanceledErrorState()
+    {
+        var service = new TestStateService<string>();
+        using var cancellationTokenSource = new CancellationTokenSource();
+
+        var result = await service.SetAsync(async cancellationToken =>
+        {
+            cancellationTokenSource.Cancel();
+            await Task.Delay(TimeSpan.FromSeconds(30), cancellationToken);
+            return "Finished";
+        }, cancellationTokenSource.Token);
+
+        Assert.Equal(StateStatus.Error, result.Status);
+        Assert.Null(result.Value);
+        Assert.Equal("Operation canceled.", result.ErrorMessage);
+        Assert.Equal(result, service.State);
+    }
+
+    [Fact]
     public async Task SetAsync_WhenStateChangedSubscriberThrows_DoesNotFailTransitionOrSkipOtherSubscribers()
     {
         var service = new TestStateService<int>();

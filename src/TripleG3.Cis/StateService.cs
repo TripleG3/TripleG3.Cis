@@ -46,7 +46,7 @@ public abstract class StateService<T> : IStateService<T>
     /// Runs the asynchronous value factory one transition at a time and updates the state status.
     /// </summary>
     /// <param name="factory">The factory that produces the next state value. Must be a <see cref="StateValueFactory{T}"/>.</param>
-    /// <param name="cancellationToken">A token that cancels waiting for the transition.</param>
+    /// <param name="cancellationToken">A token that cancels waiting for the transition or creating the next state value.</param>
     /// <returns>The resulting <see cref="State{T}"/> after the transition completes or fails.</returns>
     public async ValueTask<State<T>> SetAsync(StateValueFactory<T> factory, CancellationToken cancellationToken)
     {
@@ -70,6 +70,11 @@ public abstract class StateService<T> : IStateService<T>
             State = State with { Status = StateStatus.Busy, ErrorMessage = string.Empty };
             var value = await factory(cancellationToken);
             State = State with { Value = value, Status = StateStatus.Ready };
+            return State;
+        }
+        catch (OperationCanceledException)
+        {
+            State = State with { Status = StateStatus.Error, ErrorMessage = "Operation canceled." };
             return State;
         }
         catch (Exception ex)
