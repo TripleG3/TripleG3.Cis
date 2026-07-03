@@ -5,7 +5,7 @@ public class StateServiceTests
     [Fact]
     public async Task SetAsync_WhenFactorySucceeds_RaisesBusyThenReady()
     {
-        var service = new TestStateService<int>();
+        var service = new StateService<int>();
         var changes = new List<State<int>>();
 
         service.StateChanged += (_, state) => changes.Add(state);
@@ -30,9 +30,30 @@ public class StateServiceTests
     }
 
     [Fact]
+    public async Task SetAsync_WhenFactoryUsesCurrentState_PassesBusySnapshotWithPreviousValue()
+    {
+        var service = new StateService<int>();
+        State<int>? observedState = null;
+
+        await service.SetAsync(_ => new ValueTask<int>(41), CancellationToken.None);
+
+        var result = await service.SetAsync((state, _) =>
+        {
+            observedState = state;
+            return Task.FromResult(state.Value + 1);
+        }, CancellationToken.None);
+
+        Assert.NotNull(observedState);
+        Assert.Equal(StateStatus.Busy, observedState.Status);
+        Assert.Equal(41, observedState.Value);
+        Assert.Equal(StateStatus.Ready, result.Status);
+        Assert.Equal(42, result.Value);
+    }
+
+    [Fact]
     public async Task SetAsync_WhenFactoryThrows_ReturnsErrorState()
     {
-        var service = new TestStateService<int>();
+        var service = new StateService<int>();
 
         var result = await service.SetAsync(_ => throw new InvalidOperationException("Boom."), CancellationToken.None);
 
@@ -44,7 +65,7 @@ public class StateServiceTests
     [Fact]
     public async Task SetAsync_WhenFactoryIsCanceled_ReturnsOperationCanceledErrorState()
     {
-        var service = new TestStateService<string>();
+        var service = new StateService<string>();
         using var cancellationTokenSource = new CancellationTokenSource();
 
         var result = await service.SetAsync(async cancellationToken =>
@@ -63,7 +84,7 @@ public class StateServiceTests
     [Fact]
     public async Task SetAsync_WhenStateChangedSubscriberThrows_DoesNotFailTransitionOrSkipOtherSubscribers()
     {
-        var service = new TestStateService<int>();
+        var service = new StateService<int>();
         var factoryInvoked = false;
         var observedStates = new List<State<int>>();
 
@@ -93,7 +114,7 @@ public class StateServiceTests
     [Fact]
     public async Task SetAsync_WhenTransitionsOverlap_RunsOneFactoryAtATime()
     {
-        var service = new TestStateService<int>();
+        var service = new StateService<int>();
         var firstStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var firstMayFinish = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var secondStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -127,7 +148,7 @@ public class StateServiceTests
     [Fact]
     public async Task SetAsync_WhenWaitingTransitionIsCanceled_KeepsFollowingTransitionSerialized()
     {
-        var service = new TestStateService<int>();
+        var service = new StateService<int>();
         var firstStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var firstMayFinish = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var thirdStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -176,7 +197,7 @@ public class StateServiceTests
     [Fact]
     public async Task SetAsync_WhenCancellationTokenIsAlreadyCanceled_ReturnsErrorStateWithoutInvokingFactory()
     {
-        var service = new TestStateService<int>();
+        var service = new StateService<int>();
         using var cancellationTokenSource = new CancellationTokenSource();
         cancellationTokenSource.Cancel();
         var factoryInvoked = false;

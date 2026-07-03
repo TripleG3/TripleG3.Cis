@@ -9,9 +9,9 @@ public sealed class ExampleService(IExampleApi exampleApi) : StateService<Exampl
     /// Advances the example workflow to the next step.
     /// </summary>
     /// <param name="cancellationToken">A token that cancels the step transition.</param>
-    /// <returns>A value task that completes when the step transition has finished.</returns>
-    public async ValueTask SetNextStepAsync(CancellationToken cancellationToken)
+    /// <returns>The state after the step transition has finished.</returns>
+    public ValueTask<State<ExampleServiceSteps>> SetNextStepAsync(CancellationToken cancellationToken)
     {
-        await SetAsync(async ct => await exampleApi.GetStepApiAsync(State, ct), cancellationToken);
+        return SetAsync(exampleApi.GetStepApiAsync, cancellationToken);
     }
 }

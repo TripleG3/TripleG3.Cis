@@ -26,8 +26,8 @@ dotnet build TripleG3.Cis.slnx
 
 `TripleG3.Cis` gives you a pattern for command-driven state:
 
-1. A public method represents the command, such as `RefreshAsync` or `SetNextStepAsync`.
-2. The command calls `SetAsync(...)` with a `StateValueFactory<T>`.
+1. A public method can represent the command, such as `RefreshAsync` or `SetNextStepAsync`.
+2. The command calls `SetAsync(...)`, or simple consumers can use `StateService<T>` directly.
 3. `StateService<T>` serializes updates so one transition runs at a time.
 4. Consumers read `State` or subscribe to `StateChanged`.
 
@@ -41,7 +41,7 @@ No mystery ceremony. Just immutable snapshots and predictable transitions.
 | `StateStatus` | Status enum: `None`, `Busy`, `Ready`, `Error`. | Decide what the UI, caller, or workflow should do next. |
 | `StateValueFactory<T>` | Async delegate that creates the next state value. | Wrap the actual work used by `SetAsync`. |
 | `IStateService<T>` | Contract for observable state services. | Depend on state behavior without tying callers to a concrete class. |
-| `StateService<T>` | Base class that implements state transitions and notifications. | Build your own command-style state service. |
+| `StateService<T>` | Concrete service that implements state transitions and notifications. | Use directly for simple state or derive from it for named command methods. |
 | `IStateService<T>.Empty` | No-op state service that always returns `State<T>.Empty`. | Use as a safe default or placeholder. |
 
 ## State Statuses
@@ -54,7 +54,37 @@ No mystery ceremony. Just immutable snapshots and predictable transitions.
 
 `StateStatus.Error` means the latest transition threw an exception. Check `State<T>.ErrorMessage` for the message.
 
-## Create A State Service
+## Use StateService Directly
+
+For one-command state, use `StateService<T>` directly and pass the value factory to `SetAsync`.
+
+```csharp
+using TripleG3.Cis;
+
+public sealed record DownloadInfo(string FileName, int PercentComplete);
+
+var service = new StateService<DownloadInfo>();
+
+service.StateChanged += (_, state) =>
+{
+    Console.WriteLine($"{state.Status}: {state.Value?.FileName} {state.Value?.PercentComplete}%");
+};
+
+State<DownloadInfo> result = await service.SetAsync(GetDownloadInfoAsync, CancellationToken.None);
+
+if (result is { Status: StateStatus.Ready, Value: { } downloadInfo })
+{
+    Console.WriteLine($"Done: {downloadInfo.FileName}");
+}
+
+static async ValueTask<DownloadInfo> GetDownloadInfoAsync(CancellationToken cancellationToken)
+{
+    await Task.Delay(250, cancellationToken);
+    return new DownloadInfo("Guide.pdf", 100);
+}
+```
+
+## Create A Named State Service
 
 Derive from `StateService<T>` and expose command methods that call `SetAsync`.
 
@@ -78,7 +108,7 @@ public sealed class DownloadStateService : StateService<DownloadInfo>
 }
 ```
 
-Use it like this:
+Use a named service like this:
 
 ```csharp
 var service = new DownloadStateService();
@@ -133,7 +163,7 @@ Console.WriteLine(service.State.Status);
 Console.WriteLine(service.State.Value);
 ```
 
-`ExampleService` delegates step calculation to `IExampleApi`, then lets `StateService<ExampleServiceSteps>` handle the `Busy`, `Ready`, and `Error` transitions. `ExampleServiceWatcher` subscribes to `StateChanged` and writes each update to the console. It is intentionally simple so the state pattern is easy to see.
+`ExampleService` delegates step calculation to `IExampleApi` with the state-aware `SetAsync` overload, then lets `StateService<ExampleServiceSteps>` handle the `Busy`, `Ready`, and `Error` transitions. `ExampleServiceWatcher` subscribes to `StateChanged` and writes each update to the console. It is intentionally simple so the state pattern is easy to see.
 
 Console output from running `src\TripleG3.Cis.ConsoleTest\TripleG3.Cis.ConsoleTest.csproj`:
 

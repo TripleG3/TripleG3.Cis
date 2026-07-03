@@ -11,7 +11,7 @@ public class ExampleServiceTests
 
         service.StateChanged += (_, state) => changes.Add(state);
 
-        await service.SetNextStepAsync(CancellationToken.None);
+        var result = await service.SetNextStepAsync(CancellationToken.None);
 
         Assert.Collection(
             api.States,
@@ -20,6 +20,8 @@ public class ExampleServiceTests
                 Assert.Equal(StateStatus.Busy, state.Status);
                 Assert.Equal(ExampleServiceSteps.None, state.Value);
             });
+        Assert.Equal(StateStatus.Ready, result.Status);
+        Assert.Equal(ExampleServiceSteps.Step1, result.Value);
         Assert.Equal(StateStatus.Ready, service.State.Status);
         Assert.Equal(ExampleServiceSteps.Step1, service.State.Value);
         Assert.Collection(
@@ -38,8 +40,10 @@ public class ExampleServiceTests
         var api = new TestExampleApi((_, _) => throw new InvalidOperationException("API down."));
         var service = new ExampleService(api);
 
-        await service.SetNextStepAsync(CancellationToken.None);
+        var result = await service.SetNextStepAsync(CancellationToken.None);
 
+        Assert.Equal(StateStatus.Error, result.Status);
+        Assert.Equal("API down.", result.ErrorMessage);
         Assert.Equal(StateStatus.Error, service.State.Status);
         Assert.Equal("API down.", service.State.ErrorMessage);
     }

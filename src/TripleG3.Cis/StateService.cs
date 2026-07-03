@@ -1,10 +1,10 @@
 namespace TripleG3.Cis;
 
 /// <summary>
-/// Provides serialized state transition behavior for state services.
+/// Provides serialized state transition behavior for state services and can be used directly or as a base class.
 /// </summary>
 /// <typeparam name="T">The type of value held by the state.</typeparam>
-public abstract class StateService<T> : IStateService<T>
+public class StateService<T> : IStateService<T>
 {
     private readonly SemaphoreSlim semaphoreSlim = new(1, 1);
     private State<T> state = State<T>.Empty;
@@ -40,6 +40,17 @@ public abstract class StateService<T> : IStateService<T>
             {
             }
         }
+    }
+
+    /// <summary>
+    /// Runs an asynchronous value factory that receives the current state snapshot.
+    /// </summary>
+    /// <param name="factory">The factory that receives the current state snapshot and produces the next state value.</param>
+    /// <param name="cancellationToken">A token that cancels waiting for the transition or creating the next state value.</param>
+    /// <returns>The resulting <see cref="State{T}"/> after the transition completes or fails.</returns>
+    public ValueTask<State<T>> SetAsync(Func<State<T>, CancellationToken, Task<T>> factory, CancellationToken cancellationToken)
+    {
+        return SetAsync(ct => new ValueTask<T>(factory(State, ct)), cancellationToken);
     }
 
     /// <summary>
