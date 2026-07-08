@@ -7,17 +7,17 @@ namespace TripleG3.Cis;
 public class StateService<T> : IStateService<T>
 {
     private readonly SemaphoreSlim semaphoreSlim = new(1, 1);
-    private State<T> state = State<T>.Empty;
+    private State<T?> state = State<T?>.Empty;
 
     /// <summary>
     /// Occurs after the state value, status, or error message changes. Subscriber exceptions are isolated from state transitions.
     /// </summary>
-    public event EventHandler<State<T>> StateChanged = delegate { };
+    public event EventHandler<State<T?>> StateChanged = delegate { };
     
     /// <summary>
     /// Gets the current state snapshot.
     /// </summary>
-    public State<T> State
+    public State<T?> State
     {
         get => state;
         private set
@@ -28,9 +28,9 @@ public class StateService<T> : IStateService<T>
         }
     }
 
-    private void RaiseStateChanged(State<T> value)
+    private void RaiseStateChanged(State<T?> value)
     {
-        foreach (EventHandler<State<T>> handler in StateChanged.GetInvocationList().Cast<EventHandler<State<T>>>())
+        foreach (EventHandler<State<T?>> handler in StateChanged.GetInvocationList().Cast<EventHandler<State<T?>>>() )
         {
             try
             {
@@ -48,9 +48,9 @@ public class StateService<T> : IStateService<T>
     /// <param name="factory">The factory that receives the current state snapshot and produces the next state value.</param>
     /// <param name="cancellationToken">A token that cancels waiting for the transition or creating the next state value.</param>
     /// <returns>The resulting <see cref="State{T}"/> after the transition completes or fails.</returns>
-    public ValueTask<State<T>> SetAsync(Func<State<T>, CancellationToken, Task<T>> factory, CancellationToken cancellationToken)
+    public ValueTask<State<T?>> SetAsync(Func<State<T?>, CancellationToken, Task<T?>> factory, CancellationToken cancellationToken)
     {
-        return SetAsync(ct => new ValueTask<T>(factory(State, ct)), cancellationToken);
+        return SetAsync(ct => new ValueTask<T?>(factory(State, ct)), cancellationToken);
     }
 
     /// <summary>
@@ -59,7 +59,7 @@ public class StateService<T> : IStateService<T>
     /// <param name="factory">The factory that produces the next state value. Must be a <see cref="StateValueFactory{T}"/>.</param>
     /// <param name="cancellationToken">A token that cancels waiting for the transition or creating the next state value.</param>
     /// <returns>The resulting <see cref="State{T}"/> after the transition completes or fails.</returns>
-    public async ValueTask<State<T>> SetAsync(StateValueFactory<T> factory, CancellationToken cancellationToken)
+    public async ValueTask<State<T?>> SetAsync(StateValueFactory<T?> factory, CancellationToken cancellationToken)
     {
         try
         {
