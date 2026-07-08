@@ -3,6 +3,19 @@ namespace TripleG3.Cis.Tests;
 public class StateServiceTests
 {
     [Fact]
+    public void State_WhenGenericArgumentControlsValueNullability_ExposesMatchingValueType()
+    {
+        var notNullIntService = new StateService<int>();
+        var nullIntService = new StateService<int?>();
+
+        int notNullValue = notNullIntService.State.Value;
+        int? nullValue = nullIntService.State.Value;
+
+        Assert.Equal(0, notNullValue);
+        Assert.Null(nullValue);
+    }
+
+    [Fact]
     public async Task SetAsync_WhenFactorySucceeds_RaisesBusyThenReady()
     {
         var service = new StateService<int>();
@@ -228,5 +241,36 @@ public class StateServiceTests
         Assert.False(factoryInvoked);
         Assert.Equal(State<int>.Empty, result);
         Assert.Equal(State<int>.Empty, service.State);
+    }
+
+    [Fact]
+    public async Task SetAsync_WhenNullableValueTypeFactoryReturnsNull_AllowsNullValue()
+    {
+        var service = new StateService<int?>();
+        State<int?> initialState = service.State;
+
+        var result = await service.SetAsync(_ => new ValueTask<int?>((int?)null), CancellationToken.None);
+
+        Assert.Null(initialState.Value);
+        Assert.Equal(StateStatus.Ready, result.Status);
+        Assert.Null(result.Value);
+        Assert.Equal(result, service.State);
+    }
+
+    [Fact]
+    public async Task Empty_WhenNullableValueTypeSetAsyncIsCalled_ReturnsNullableEmptyStateWithoutInvokingFactory()
+    {
+        var service = IStateService<int?>.Empty;
+        var factoryInvoked = false;
+
+        var result = await service.SetAsync(_ =>
+        {
+            factoryInvoked = true;
+            return new ValueTask<int?>(42);
+        }, CancellationToken.None);
+
+        Assert.False(factoryInvoked);
+        Assert.Equal(State<int?>.Empty, result);
+        Assert.Equal(State<int?>.Empty, service.State);
     }
 }

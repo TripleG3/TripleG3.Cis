@@ -15,9 +15,9 @@ public sealed class ExampleApi : IExampleApi
     {
         await Task.Delay(1000, cancellationToken); // Simulate some work
         return state.Value == ExampleServiceSteps.None ? ExampleServiceSteps.Step1 :
-                              state.Value == ExampleServiceSteps.Step1 ? ExampleServiceSteps.Step2 :
-                              state.Value == ExampleServiceSteps.Step2 ? ExampleServiceSteps.Step3 :
-                              state.Value == ExampleServiceSteps.Step3 ? ExampleServiceSteps.Complete :
-                              throw new InvalidOperationException($"Unknown step: {state.Value}");
+               state.Value == ExampleServiceSteps.Step1 ? ExampleServiceSteps.Step2 :
+               state.Value == ExampleServiceSteps.Step2 ? ExampleServiceSteps.Step3 :
+               state.Value == ExampleServiceSteps.Step3 ? ExampleServiceSteps.Complete :
+               throw new InvalidOperationException($"Unknown step: {state.Value}");
     }
 }

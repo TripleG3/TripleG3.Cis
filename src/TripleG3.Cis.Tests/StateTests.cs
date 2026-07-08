@@ -21,4 +21,14 @@ public class StateTests
         Assert.Equal(StateStatus.None, state.Status);
         Assert.Equal(string.Empty, state.ErrorMessage);
     }
+
+    [Fact]
+    public void Empty_WhenNullableValueTypeState_HasNullValue()
+    {
+        var state = State<int?>.Empty;
+
+        Assert.Null(state.Value);
+        Assert.Equal(StateStatus.None, state.Status);
+        Assert.Equal(string.Empty, state.ErrorMessage);
+    }
 }

@@ -37,12 +37,12 @@ No mystery ceremony. Just immutable snapshots and predictable transitions.
 
 | Type | What It Does | When To Use It |
 | --- | --- | --- |
-| `State<T>` | Immutable snapshot with nullable `Value`, `Status`, and `ErrorMessage`. | Return or inspect the latest service state. |
+| `State<T>` | Immutable snapshot with `Value`, `Status`, and `ErrorMessage`. | Return or inspect the latest service state. Use `State<T?>` when a value-type state should allow `null`. |
 | `StateStatus` | Status enum: `None`, `Busy`, `Ready`, `Error`. | Decide what the UI, caller, or workflow should do next. |
 | `StateValueFactory<T>` | Async delegate that creates the next state value. | Wrap the actual work used by `SetAsync`. |
 | `IStateService<T>` | Contract for observable state services. | Depend on state behavior without tying callers to a concrete class. |
 | `StateService<T>` | Concrete service that implements state transitions and notifications. | Use directly for simple state or derive from it for named command methods. |
-| `IStateService<T>.Empty` | No-op state service that always returns `State<T>.Empty`. | Use as a safe default or placeholder. |
+| `IStateService<T>.Empty` | No-op state service that always returns the corresponding empty state. | Use as a safe default or placeholder. |
 
 ## State Statuses
 
@@ -50,7 +50,27 @@ No mystery ceremony. Just immutable snapshots and predictable transitions.
 
 `StateStatus.Busy` means a transition is running.
 
-`StateStatus.Ready` means the latest value was produced successfully. `State<T>.Value` is nullable because empty and failed states may not have a reference-type value.
+`StateStatus.Ready` means the latest value was produced successfully. The successful value comes from the service's `StateValueFactory<T>`.
+
+## Choose Nullable Or Non-Nullable State
+
+The important rule is to preserve `T` through the API and choose nullability at the call site. Do not make every service member `T?` just to support nullable values. Instead, close the generic type with either `T` or `T?`.
+
+For value types, this gives you the exact shape you would expect:
+
+```csharp
+var notNullIntService = new StateService<int>();
+State<int> notNullState = notNullIntService.State;
+int notNullValue = notNullState.Value;
+
+var nullIntService = new StateService<int?>();
+State<int?> nullState = nullIntService.State;
+int? nullValue = nullState.Value;
+```
+
+For value-type state that should start empty with `Value == null`, make the closed generic type nullable, such as `StateService<int?>`, `IStateService<int?>`, or `State<MyEnum?>`. A non-nullable value-type state such as `State<int>` still uses that type's default value for `State<T>.Empty`.
+
+For reference-type state, `State<T>.Value` is still nullable when you read the snapshot because empty and failed states may not have a value yet. Use the service's `T` to describe what a successful factory returns, such as `StateService<DownloadInfo>` when `SetAsync` should produce a non-null `DownloadInfo`.
 
 `StateStatus.Error` means the latest transition threw an exception. Check `State<T>.ErrorMessage` for the message.
 
@@ -163,7 +183,7 @@ Console.WriteLine(service.State.Status);
 Console.WriteLine(service.State.Value);
 ```
 
-`ExampleService` delegates step calculation to `IExampleApi` with the state-aware `SetAsync` overload, then lets `StateService<ExampleServiceSteps>` handle the `Busy`, `Ready`, and `Error` transitions. `ExampleServiceWatcher` subscribes to `StateChanged` and writes each update to the console. It is intentionally simple so the state pattern is easy to see.
+`ExampleService` delegates step calculation to `IExampleApi` with the state-aware `SetAsync` overload, then lets `StateService<ExampleServiceSteps>` handle the `Busy`, `Ready`, and `Error` transitions. `ExampleServiceSteps.None` is the explicit initial workflow value. `ExampleServiceWatcher` subscribes to `StateChanged` and writes each update to the console. It is intentionally simple so the state pattern is easy to see.
 
 Console output from running `src\TripleG3.Cis.ConsoleTest\TripleG3.Cis.ConsoleTest.csproj`:
 
@@ -188,20 +208,20 @@ State changed: Ready - Complete
 
 ## Use The Empty Service
 
-`IStateService<T>.Empty` is handy when a caller needs an `IStateService<T>` but there is no real implementation yet.
+`IStateService<T>.Empty` is handy when a caller needs an `IStateService<T>` but there is no real implementation yet. Use a nullable closed generic when the empty service should expose a null value.
 
 ```csharp
-IStateService<string> service = IStateService<string>.Empty;
+IStateService<int?> service = IStateService<int?>.Empty;
 
-State<string> state = await service.SetAsync(
-    cancellationToken => new ValueTask<string>("This value is ignored."),
+State<int?> state = await service.SetAsync(
+    cancellationToken => new ValueTask<int?>(42),
     CancellationToken.None);
 
 Console.WriteLine(state.Status); // None
 Console.WriteLine(state.Value is null); // True
 ```
 
-The empty service never invokes the factory and always returns `State<T>.Empty`, whose `Value` is `null` for reference-type state values.
+The empty service never invokes the factory and always returns the corresponding empty state, whose `Value` is `null` when the closed state type is nullable, such as `string?` or `int?`.
 
 ## Tips
 
