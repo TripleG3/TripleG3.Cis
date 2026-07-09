@@ -37,7 +37,7 @@ No mystery ceremony. Just immutable snapshots and predictable transitions.
 
 | Type | What It Does | When To Use It |
 | --- | --- | --- |
-| `State<T>` | Immutable snapshot with `Value`, `Status`, and `ErrorMessage`. | Return or inspect the latest service state. Use `State<T?>` when a value-type state should allow `null`. |
+| `State<T>` | Immutable snapshot with `Value`, `Status`, and `ErrorMessage`. | Return or inspect the latest service state. Use a nullable closed generic such as `State<int?>` when a value-type state should allow `null`. |
 | `StateStatus` | Status enum: `None`, `Busy`, `Ready`, `Error`. | Decide what the UI, caller, or workflow should do next. |
 | `StateValueFactory<T>` | Async delegate that creates the next state value. | Wrap the actual work used by `SetAsync`. |
 | `IStateService<T>` | Contract for observable state services. | Depend on state behavior without tying callers to a concrete class. |
@@ -70,7 +70,7 @@ int? nullValue = nullState.Value;
 
 For value-type state that should start empty with `Value == null`, make the closed generic type nullable, such as `StateService<int?>`, `IStateService<int?>`, or `State<MyEnum?>`. A non-nullable value-type state such as `State<int>` still uses that type's default value for `State<T>.Empty`.
 
-For reference-type state, `State<T>.Value` is still nullable when you read the snapshot because empty and failed states may not have a value yet. Use the service's `T` to describe what a successful factory returns, such as `StateService<DownloadInfo>` when `SetAsync` should produce a non-null `DownloadInfo`.
+For reference-type state, `State<T>.Value` preserves the same `T` annotation instead of becoming `T?`. Use the service's `T` to describe what a successful factory returns, such as `StateService<DownloadInfo>` when `SetAsync` should produce a non-null `DownloadInfo`. Check `StateStatus.Ready` before relying on `Value`; empty snapshots use the default value for `T`.
 
 `StateStatus.Error` means the latest transition threw an exception. Check `State<T>.ErrorMessage` for the message.
 
