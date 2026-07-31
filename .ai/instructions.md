@@ -11,6 +11,7 @@
 - Preserve the namespaces `TripleG3.Cis` and `TripleG3.Cis.Examples` unless the user explicitly asks for a namespace change.
 - Validate library changes with `dotnet build TripleG3.Cis.slnx` from the repository root.
 - Use `StateService<T>` directly for simple one-command state workflows; derive from it when named commands or injected dependencies make the consumer API clearer.
+- `StateService<T>` is abstract; inherited services may use its protected `Func<T>` constructor to initialize a default value while preserving `StateStatus.None`.
 
 ## 2026-07-08
 

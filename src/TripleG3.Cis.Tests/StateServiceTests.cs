@@ -3,10 +3,45 @@ namespace TripleG3.Cis.Tests;
 public class StateServiceTests
 {
     [Fact]
+    public void Constructor_WhenDefaultFactoryIsProvided_InitializesValueAndPreservesNoneStatus()
+    {
+        var service = new TestStateService<string?>(() => "Initial value");
+
+        Assert.Equal("Initial value", service.State.Value);
+        Assert.Equal(StateStatus.None, service.State.Status);
+        Assert.Empty(service.State.ErrorMessage);
+    }
+
+    [Fact]
+    public void Constructor_WhenDefaultFactoryIsProvided_InvokesFactoryOnce()
+    {
+        var factoryCalls = 0;
+
+        _ = new TestStateService<string?>(() =>
+        {
+            factoryCalls++;
+            return "Initial value";
+        });
+
+        Assert.Equal(1, factoryCalls);
+    }
+
+    [Fact]
+    public async Task Constructor_WhenDefaultValueIsProvided_AllowsNormalTransitionsToReplaceIt()
+    {
+        var service = new TestStateService<string?>(() => "Initial value");
+
+        var result = await service.SetAsync(_ => new ValueTask<string?>("Loaded value"), CancellationToken.None);
+
+        Assert.Equal("Loaded value", result.Value);
+        Assert.Equal(StateStatus.Ready, result.Status);
+    }
+
+    [Fact]
     public void State_WhenGenericArgumentControlsValueNullability_ExposesMatchingValueType()
     {
-        var notNullIntService = new StateService<int>();
-        var nullIntService = new StateService<int?>();
+        var notNullIntService = new TestStateService<int>();
+        var nullIntService = new TestStateService<int?>();
 
         int notNullValue = notNullIntService.State.Value;
         int? nullValue = nullIntService.State.Value;
@@ -18,7 +53,7 @@ public class StateServiceTests
     [Fact]
     public async Task SetAsync_WhenFactorySucceeds_RaisesBusyThenReady()
     {
-        var service = new StateService<int>();
+        var service = new TestStateService<int>();
         var changes = new List<State<int>>();
 
         service.StateChanged += (_, state) => changes.Add(state);
@@ -45,7 +80,7 @@ public class StateServiceTests
     [Fact]
     public async Task SetAsync_WhenFactoryUsesCurrentState_PassesBusySnapshotWithPreviousValue()
     {
-        var service = new StateService<int>();
+        var service = new TestStateService<int>();
         State<int>? observedState = null;
 
         await service.SetAsync(_ => new ValueTask<int>(41), CancellationToken.None);
@@ -66,7 +101,7 @@ public class StateServiceTests
     [Fact]
     public async Task SetAsync_WhenFactoryThrows_ReturnsErrorState()
     {
-        var service = new StateService<int>();
+        var service = new TestStateService<int>();
 
         var result = await service.SetAsync(_ => throw new InvalidOperationException("Boom."), CancellationToken.None);
 
@@ -78,7 +113,7 @@ public class StateServiceTests
     [Fact]
     public async Task SetAsync_WhenFactoryIsCanceled_ReturnsOperationCanceledErrorState()
     {
-        var service = new StateService<string>();
+        var service = new TestStateService<string>();
         using var cancellationTokenSource = new CancellationTokenSource();
 
         var result = await service.SetAsync(async cancellationToken =>
@@ -97,7 +132,7 @@ public class StateServiceTests
     [Fact]
     public async Task SetAsync_WhenStateChangedSubscriberThrows_DoesNotFailTransitionOrSkipOtherSubscribers()
     {
-        var service = new StateService<int>();
+        var service = new TestStateService<int>();
         var factoryInvoked = false;
         var observedStates = new List<State<int>>();
 
@@ -127,7 +162,7 @@ public class StateServiceTests
     [Fact]
     public async Task SetAsync_WhenTransitionsOverlap_RunsOneFactoryAtATime()
     {
-        var service = new StateService<int>();
+        var service = new TestStateService<int>();
         var firstStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var firstMayFinish = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var secondStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -161,7 +196,7 @@ public class StateServiceTests
     [Fact]
     public async Task SetAsync_WhenWaitingTransitionIsCanceled_KeepsFollowingTransitionSerialized()
     {
-        var service = new StateService<int>();
+        var service = new TestStateService<int>();
         var firstStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var firstMayFinish = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var thirdStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -210,7 +245,7 @@ public class StateServiceTests
     [Fact]
     public async Task SetAsync_WhenCancellationTokenIsAlreadyCanceled_ReturnsErrorStateWithoutInvokingFactory()
     {
-        var service = new StateService<int>();
+        var service = new TestStateService<int>();
         using var cancellationTokenSource = new CancellationTokenSource();
         cancellationTokenSource.Cancel();
         var factoryInvoked = false;
@@ -246,7 +281,7 @@ public class StateServiceTests
     [Fact]
     public async Task SetAsync_WhenNullableValueTypeFactoryReturnsNull_AllowsNullValue()
     {
-        var service = new StateService<int?>();
+        var service = new TestStateService<int?>();
         State<int?> initialState = service.State;
 
         var result = await service.SetAsync(_ => new ValueTask<int?>((int?)null), CancellationToken.None);
@@ -272,5 +307,17 @@ public class StateServiceTests
         Assert.False(factoryInvoked);
         Assert.Equal(State<int?>.Empty, result);
         Assert.Equal(State<int?>.Empty, service.State);
+    }
+
+    private sealed class TestStateService<T> : StateService<T>
+    {
+        public TestStateService()
+        {
+        }
+
+        public TestStateService(Func<T> defaultValueFactory)
+            : base(defaultValueFactory)
+        {
+        }
     }
 }

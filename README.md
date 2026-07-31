@@ -27,7 +27,7 @@ dotnet build TripleG3.Cis.slnx
 `TripleG3.Cis` gives you a pattern for command-driven state:
 
 1. A public method can represent the command, such as `RefreshAsync` or `SetNextStepAsync`.
-2. The command calls `SetAsync(...)`, or simple consumers can use `StateService<T>` directly.
+2. The command calls `SetAsync(...)` on an inherited state service.
 3. `StateService<T>` serializes updates so one transition runs at a time.
 4. Consumers read `State` or subscribe to `StateChanged`.
 
@@ -41,7 +41,7 @@ No mystery ceremony. Just immutable snapshots and predictable transitions.
 | `StateStatus` | Status enum: `None`, `Busy`, `Ready`, `Error`. | Decide what the UI, caller, or workflow should do next. |
 | `StateValueFactory<T>` | Async delegate that creates the next state value. | Wrap the actual work used by `SetAsync`. |
 | `IStateService<T>` | Contract for observable state services. | Depend on state behavior without tying callers to a concrete class. |
-| `StateService<T>` | Concrete service that implements state transitions and notifications. | Use directly for simple state or derive from it for named command methods. |
+| `StateService<T>` | Abstract base service that implements state transitions and notifications. | Derive from it for named command methods and optionally initialize a default value in a constructor. |
 | `IStateService<T>.Empty` | No-op state service that always returns the corresponding empty state. | Use as a safe default or placeholder. |
 
 ## State Statuses
@@ -74,7 +74,25 @@ For reference-type state, `State<T>.Value` preserves the same `T` annotation ins
 
 `StateStatus.Error` means the latest transition threw an exception. Check `State<T>.ErrorMessage` for the message.
 
-## Use StateService Directly
+## Set A Default Value In An Inherited Service
+
+An inherited service can initialize its value before the first command by using the protected secondary `StateService<T>` constructor. The constructor evaluates the factory during construction, updates the value, and preserves `StateStatus.None`. It does not mark the state as `Ready`, because no asynchronous command has completed.
+
+```csharp
+public sealed class SettingsStateService : StateService<Settings>
+{
+    public SettingsStateService(Settings defaultSettings)
+        : base(() => defaultSettings)
+    {
+    }
+}
+
+public sealed record Settings(string Theme, bool NotificationsEnabled);
+```
+
+The default factory is evaluated once during construction. A later command can replace the default value through the normal `SetAsync` transition flow, and the state remains `None` until that transition succeeds.
+
+## Use A State Service
 
 For one-command state, use `StateService<T>` directly and pass the value factory to `SetAsync`.
 
@@ -83,7 +101,7 @@ using TripleG3.Cis;
 
 public sealed record DownloadInfo(string FileName, int PercentComplete);
 
-var service = new StateService<DownloadInfo>();
+var service = new DownloadStateService();
 
 service.StateChanged += (_, state) =>
 {

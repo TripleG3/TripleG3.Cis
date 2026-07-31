@@ -4,8 +4,22 @@ namespace TripleG3.Cis;
 /// Provides serialized state transition behavior for state services and can be used directly or as a base class.
 /// </summary>
 /// <typeparam name="T">The type of value held by the state.</typeparam>
-public class StateService<T> : IStateService<T>
+public abstract class StateService<T> : IStateService<T>
 {
+    /// <summary>
+    /// Initializes a new instance of the <see cref="StateService{T}"/> class with the default empty state.
+    /// </summary>
+    protected StateService() { }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="StateService{T}"/> class with the specified default value factory.
+    /// </summary>
+    /// <param name="defaultValueFactory">A function that produces the default value for the state.</param>
+    protected StateService(Func<T> defaultValueFactory) 
+    { 
+        State = State with { Value = defaultValueFactory() };
+    }
+
     private readonly SemaphoreSlim semaphoreSlim = new(1, 1);
     private State<T> state = State<T>.Empty;
 
