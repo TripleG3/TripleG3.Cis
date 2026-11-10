@@ -20,4 +20,4 @@
 ## 2026-11-10
 
 - Use `MichaelPuckett2G3` for this checkout's GitHub HTTPS authentication; keep credential overrides repository-local, resolve tokens from GitHub CLI's keyring without storing them in Git configuration, and verify account identity and push access with a dry run.
-- Publish NuGet packages with the shared GitHub Actions secret `NUGET_API_KEY`, backed by the organization's NuGet.org API key managed through its NuGet account; do not use Trusted Publishing for this organization's repositories.
+- Publish CIS using NuGet Trusted Publishing with the pinned `NuGet/login` action, job-scoped `id-token: write`, GitHub environment `nuget`, and repository variable `NUGET_USER`. The NuGet policy must authorize repository `TripleG3/TripleG3.Cis`, workflow `nuget-publish.yml`, environment `nuget`, and a package pattern covering `TripleG3.Cis`; widening the package pattern alone does not authorize another repository.
