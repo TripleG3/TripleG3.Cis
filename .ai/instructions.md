@@ -20,3 +20,4 @@
 ## 2026-11-10
 
 - Use `MichaelPuckett2G3` for this checkout's GitHub HTTPS authentication; keep credential overrides repository-local, resolve tokens from GitHub CLI's keyring without storing them in Git configuration, and verify account identity and push access with a dry run.
+- Publish NuGet packages with the shared GitHub Actions secret `NUGET_API_KEY`, backed by the organization's NuGet.org API key managed through its NuGet account; do not use Trusted Publishing for this organization's repositories.

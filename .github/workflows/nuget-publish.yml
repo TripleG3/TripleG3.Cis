@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -19,6 +20,7 @@ env:
 jobs:
   publish:
     name: Build, test, package, and publish
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
 
     steps:
