@@ -16,3 +16,7 @@
 ## 2026-07-08
 
 - Preserve the caller's closed generic type through `IStateService<T>`, `StateService<T>`, and `StateValueFactory<T>`; callers opt into nullable value state with `T?` such as `StateService<int?>` rather than forcing `T?` into every service member.
+
+## 2026-11-10
+
+- Use `MichaelPuckett2G3` for this checkout's GitHub HTTPS authentication; keep credential overrides repository-local, resolve tokens from GitHub CLI's keyring without storing them in Git configuration, and verify account identity and push access with a dry run.
