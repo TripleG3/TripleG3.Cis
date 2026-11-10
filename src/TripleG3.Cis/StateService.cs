@@ -62,6 +62,7 @@ public abstract class StateService<T> : IStateService<T>
     /// <param name="factory">The factory that receives the current state snapshot and produces the next state value.</param>
     /// <param name="cancellationToken">A token that cancels waiting for the transition or creating the next state value.</param>
     /// <returns>The resulting <see cref="State{T}"/> after the transition completes or fails.</returns>
+    /// <remarks>Cancellation before acquisition returns an unpublished error snapshot without changing shared state or raising <see cref="StateChanged"/>.</remarks>
     public ValueTask<State<T>> SetAsync(Func<State<T>, CancellationToken, Task<T>> factory, CancellationToken cancellationToken)
     {
         return SetAsync(ct => new ValueTask<T>(factory(State, ct)), cancellationToken);
@@ -73,6 +74,11 @@ public abstract class StateService<T> : IStateService<T>
     /// <param name="factory">The factory that produces the next state value. Must be a <see cref="StateValueFactory{T}"/>.</param>
     /// <param name="cancellationToken">A token that cancels waiting for the transition or creating the next state value.</param>
     /// <returns>The resulting <see cref="State{T}"/> after the transition completes or fails.</returns>
+    /// <remarks>
+    /// Only the transition that acquires the update pipeline changes shared state.
+    /// Cancellation before acquisition returns an unpublished error snapshot without invoking the factory or raising <see cref="StateChanged"/>.
+    /// Cancellation thrown by an acquired factory is published as an error transition.
+    /// </remarks>
     public async ValueTask<State<T>> SetAsync(StateValueFactory<T> factory, CancellationToken cancellationToken)
     {
         try
@@ -81,20 +87,18 @@ public abstract class StateService<T> : IStateService<T>
         }
         catch (OperationCanceledException ex) when (ex.CancellationToken == cancellationToken)
         {
-            State = State with { Status = StateStatus.Error, ErrorMessage = "Operation canceled." };
-            return State;
+            return State with { Status = StateStatus.Error, ErrorMessage = "Operation canceled." };
         }
         catch (ObjectDisposedException ex) when (ex.ObjectName == nameof(SemaphoreSlim))
         {
-            State = State with { Status = StateStatus.Error, ErrorMessage = ex.Message };
-            return State;
+            return State with { Status = StateStatus.Error, ErrorMessage = ex.Message };
         }
         
         try
         {
             State = State with { Status = StateStatus.Busy, ErrorMessage = string.Empty };
             var value = await factory(cancellationToken);
-            State = State with { Value = value, Status = StateStatus.Ready };
+            State = State with { Value = value, Status = StateStatus.Ready, ErrorMessage = string.Empty };
             return State;
         }
         catch (OperationCanceledException)

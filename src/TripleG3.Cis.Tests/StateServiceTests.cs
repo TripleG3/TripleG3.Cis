@@ -182,8 +182,8 @@ public class StateServiceTests
             return new ValueTask<int>(2);
         }, CancellationToken.None).AsTask();
 
-        var secondRanBeforeFirstFinished = await Task.WhenAny(secondStarted.Task, Task.Delay(100)) == secondStarted.Task;
-        Assert.False(secondRanBeforeFirstFinished);
+        Assert.False(secondStarted.Task.IsCompleted);
+        Assert.False(secondTask.IsCompleted);
 
         firstMayFinish.SetResult();
 
@@ -201,6 +201,8 @@ public class StateServiceTests
         var firstMayFinish = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var thirdStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var secondFactoryInvoked = false;
+        var changes = new List<State<int>>();
+        service.StateChanged += (_, state) => changes.Add(state);
 
         var firstTask = service.SetAsync(async _ =>
         {
@@ -224,6 +226,11 @@ public class StateServiceTests
 
         Assert.False(secondFactoryInvoked);
         Assert.Equal(StateStatus.Error, secondResult.Status);
+        Assert.Equal("Operation canceled.", secondResult.ErrorMessage);
+        Assert.False(firstTask.IsCompleted);
+        Assert.Equal(StateStatus.Busy, service.State.Status);
+        Assert.Empty(service.State.ErrorMessage);
+        Assert.Single(changes);
 
         var thirdTask = service.SetAsync(_ =>
         {
@@ -231,8 +238,8 @@ public class StateServiceTests
             return new ValueTask<int>(3);
         }, CancellationToken.None).AsTask();
 
-        var thirdRanBeforeFirstFinished = await Task.WhenAny(thirdStarted.Task, Task.Delay(100)) == thirdStarted.Task;
-        Assert.False(thirdRanBeforeFirstFinished);
+        Assert.False(thirdStarted.Task.IsCompleted);
+        Assert.False(thirdTask.IsCompleted);
 
         firstMayFinish.SetResult();
 
@@ -240,12 +247,19 @@ public class StateServiceTests
         await thirdStarted.Task;
         Assert.Equal(3, (await thirdTask).Value);
         Assert.Equal(3, service.State.Value);
+        Assert.Empty(service.State.ErrorMessage);
+        Assert.Equal(new[] { StateStatus.Busy, StateStatus.Ready, StateStatus.Busy, StateStatus.Ready },
+            changes.Select(state => state.Status));
     }
 
     [Fact]
-    public async Task SetAsync_WhenCancellationTokenIsAlreadyCanceled_ReturnsErrorStateWithoutInvokingFactory()
+    public async Task SetAsync_WhenCancellationTokenIsAlreadyCanceled_ReturnsUnpublishedErrorWithoutInvokingFactory()
     {
         var service = new TestStateService<int>();
+        await service.SetAsync(_ => new ValueTask<int>(41), CancellationToken.None);
+        var originalState = service.State;
+        var changes = new List<State<int>>();
+        service.StateChanged += (_, state) => changes.Add(state);
         using var cancellationTokenSource = new CancellationTokenSource();
         cancellationTokenSource.Cancel();
         var factoryInvoked = false;
@@ -258,7 +272,167 @@ public class StateServiceTests
 
         Assert.False(factoryInvoked);
         Assert.Equal(StateStatus.Error, result.Status);
+        Assert.Equal("Operation canceled.", result.ErrorMessage);
+        Assert.Equal(41, result.Value);
+        Assert.Same(originalState, service.State);
+        Assert.Empty(changes);
+        var laterResult = await service.SetAsync(_ => new ValueTask<int>(42), CancellationToken.None);
+        Assert.Equal(StateStatus.Ready, laterResult.Status);
+        Assert.Equal(42, laterResult.Value);
+    }
+
+    [Theory]
+    [InlineData("success", StateStatus.Ready, "")]
+    [InlineData("failure", StateStatus.Error, "Active failed.")]
+    [InlineData("cancellation", StateStatus.Error, "Operation canceled.")]
+    public async Task SetAsync_WhenWaiterIsCanceled_OnlyActiveTransitionPublishesOutcome(
+        string outcome, StateStatus expectedStatus, string expectedError)
+    {
+        var service = new TestStateService<int>();
+        await service.SetAsync(_ => new ValueTask<int>(41), CancellationToken.None);
+        var changes = new List<State<int>>();
+        service.StateChanged += (_, state) => changes.Add(state);
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var mayFinish = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var activeCancellation = new CancellationTokenSource();
+        using var queuedCancellation = new CancellationTokenSource();
+        var queuedFactoryInvoked = false;
+
+        var activeTask = service.SetAsync(async token =>
+        {
+            started.SetResult();
+            await mayFinish.Task;
+            token.ThrowIfCancellationRequested();
+            if (outcome == "failure") throw new InvalidOperationException("Active failed.");
+            return 42;
+        }, activeCancellation.Token).AsTask();
+        await started.Task;
+        var busyState = service.State;
+
+        var queuedTask = service.SetAsync(_ =>
+        {
+            queuedFactoryInvoked = true;
+            return new ValueTask<int>(99);
+        }, queuedCancellation.Token).AsTask();
+        Assert.False(queuedTask.IsCompleted);
+        queuedCancellation.Cancel();
+        var queuedResult = await queuedTask;
+
+        Assert.False(queuedFactoryInvoked);
+        Assert.False(activeTask.IsCompleted);
+        Assert.Same(busyState, service.State);
+        Assert.Equal(StateStatus.Error, queuedResult.Status);
+        Assert.Equal("Operation canceled.", queuedResult.ErrorMessage);
+        Assert.Equal(41, queuedResult.Value);
+        Assert.Single(changes);
+
+        if (outcome == "cancellation") activeCancellation.Cancel();
+        mayFinish.SetResult();
+        var result = await activeTask;
+
+        Assert.Equal(expectedStatus, result.Status);
+        Assert.Equal(expectedError, result.ErrorMessage);
+        Assert.Equal(outcome == "success" ? 42 : 41, result.Value);
         Assert.Equal(result, service.State);
+        Assert.Equal(new[] { StateStatus.Busy, expectedStatus }, changes.Select(state => state.Status));
+
+        var laterResult = await service.SetAsync(_ => new ValueTask<int>(100), CancellationToken.None);
+        Assert.Equal(StateStatus.Ready, laterResult.Status);
+        Assert.Equal(100, laterResult.Value);
+        Assert.Empty(laterResult.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task SetAsync_WhenSomeWaitersAreCanceled_RemainingCommandsStillExecute()
+    {
+        var service = new TestStateService<int>();
+        var mayFinish = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var changes = new List<State<int>>();
+        service.StateChanged += (_, state) => changes.Add(state);
+        var activeTask = service.SetAsync(async _ =>
+        {
+            await mayFinish.Task;
+            return 42;
+        }, CancellationToken.None).AsTask();
+        using var firstCancellation = new CancellationTokenSource();
+        using var secondCancellation = new CancellationTokenSource();
+        var canceledFactoryCalls = 0;
+        StateValueFactory<int> canceledFactory = _ =>
+        {
+            Interlocked.Increment(ref canceledFactoryCalls);
+            return new ValueTask<int>(99);
+        };
+        var firstCanceled = service.SetAsync(canceledFactory, firstCancellation.Token).AsTask();
+        var survivingFactoryCalls = 0;
+        var survivingTask = service.SetAsync(_ =>
+        {
+            Interlocked.Increment(ref survivingFactoryCalls);
+            return new ValueTask<int>(100);
+        }, CancellationToken.None).AsTask();
+        var secondCanceled = service.SetAsync(canceledFactory, secondCancellation.Token).AsTask();
+
+        firstCancellation.Cancel();
+        secondCancellation.Cancel();
+        Assert.Equal(StateStatus.Error, (await firstCanceled).Status);
+        Assert.Equal(StateStatus.Error, (await secondCanceled).Status);
+        Assert.Equal(0, canceledFactoryCalls);
+        Assert.Equal(0, survivingFactoryCalls);
+        Assert.False(survivingTask.IsCompleted);
+        Assert.Equal(StateStatus.Busy, service.State.Status);
+        Assert.Single(changes);
+
+        mayFinish.SetResult();
+        Assert.Equal(42, (await activeTask).Value);
+        Assert.Equal(100, (await survivingTask).Value);
+        Assert.Equal(1, survivingFactoryCalls);
+        Assert.Equal(0, canceledFactoryCalls);
+        Assert.Equal(new[] { StateStatus.Busy, StateStatus.Ready, StateStatus.Busy, StateStatus.Ready },
+            changes.Select(state => state.Status));
+    }
+
+    [Fact]
+    public async Task SetAsync_WhenObserverCancelsRequestAndSchedulesFollowUp_PreservesTransitions()
+    {
+        var service = new TestStateService<int>();
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+        Task<State<int>>? canceledTask = null;
+        Task<State<int>>? followUpTask = null;
+        State<int>? factoryState = null;
+        var changes = new List<State<int>>();
+        var canceledFactoryInvoked = false;
+        var scheduled = false;
+        service.StateChanged += (_, _) => throw new InvalidOperationException("Observer failed.");
+        service.StateChanged += (_, state) =>
+        {
+            if (state.Status != StateStatus.Busy || scheduled) return;
+            scheduled = true;
+            canceledTask = service.SetAsync(_ =>
+            {
+                canceledFactoryInvoked = true;
+                return new ValueTask<int>(99);
+            }, cancellation.Token).AsTask();
+            followUpTask = service.SetAsync(_ => new ValueTask<int>(43), CancellationToken.None).AsTask();
+        };
+        service.StateChanged += (_, state) => changes.Add(state);
+
+        var result = await service.SetAsync((state, _) =>
+        {
+            factoryState = state;
+            return Task.FromResult(42);
+        }, CancellationToken.None);
+
+        Assert.NotNull(canceledTask);
+        Assert.NotNull(followUpTask);
+        Assert.NotNull(factoryState);
+        Assert.Equal(StateStatus.Busy, factoryState.Status);
+        Assert.Equal(StateStatus.Error, (await canceledTask).Status);
+        Assert.False(canceledFactoryInvoked);
+        Assert.Equal(42, result.Value);
+        Assert.Equal(43, (await followUpTask).Value);
+        Assert.Equal(new[] { StateStatus.Busy, StateStatus.Ready, StateStatus.Busy, StateStatus.Ready },
+            changes.Select(state => state.Status));
+        Assert.Empty(service.State.ErrorMessage);
     }
 
     [Fact]

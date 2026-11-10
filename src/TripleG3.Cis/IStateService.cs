@@ -20,8 +20,14 @@ public interface IStateService<T>
     /// Runs the value factory and updates the state around the transition.
     /// </summary>
     /// <param name="valueFactory">The factory that produces the next state value.</param>
-    /// <param name="cancellationToken">A token that cancels the transition.</param>
+    /// <param name="cancellationToken">A token that cancels waiting for the transition or creating its value.</param>
     /// <returns>The resulting state after the transition completes or fails.</returns>
+    /// <remarks>
+    /// In <see cref="StateService{T}"/>, cancellation before acquisition returns an unpublished error snapshot:
+    /// the factory does not run, shared state is unchanged, and no change notification is raised.
+    /// The returned snapshot can therefore differ from <see cref="State"/>.
+    /// The no-op <see cref="Empty"/> service always returns the empty state, regardless of cancellation.
+    /// </remarks>
     ValueTask<State<T>> SetAsync(StateValueFactory<T> valueFactory, CancellationToken cancellationToken);
 
     /// <summary>

@@ -74,6 +74,19 @@ For reference-type state, `State<T>.Value` preserves the same `T` annotation ins
 
 `StateStatus.Error` means the latest transition threw an exception. Check `State<T>.ErrorMessage` for the message.
 
+## Cancellation And Shared State
+
+Shared state describes the transition that acquired the update pipeline, not the outcome of every command request. Only that transition publishes lifecycle changes.
+
+- A token canceled before acquisition (including while queued) prevents its factory from running. The caller receives an unpublished `Error` snapshot with `ErrorMessage == "Operation canceled."` and the value from the shared snapshot at cancellation handling. Shared `State` and `StateChanged` are unchanged; the returned snapshot can differ from `service.State`.
+- If another transition is active, canceling a waiter leaves it `Busy`. A successful active transition still publishes `Busy -> Ready`, with an empty error message.
+- Once acquired, a factory that throws `OperationCanceledException` publishes `Error` and preserves the previous value. Cancellation is cooperative: a factory that ignores its token and succeeds publishes `Ready`.
+- `IStateService<T>.Empty` remains a no-op and returns the empty state even with a canceled token.
+
+**Compatibility:** pre-acquisition cancellation no longer publishes an `Error` notification or replaces shared state. Consumers must inspect the canceled call's returned result instead of relying on shared error notifications for requests that never started. Active cancellation continues to return and publish an error rather than throwing to the caller.
+
+Observers run synchronously and subscriber exceptions are isolated. An observer may schedule a follow-up command, but must not synchronously block waiting for it: the current transition still holds the semaphore during notification.
+
 ## Set A Default Value In An Inherited Service
 
 An inherited service can initialize its value before the first command by using the protected secondary `StateService<T>` constructor. The constructor evaluates the factory during construction, updates the value, and preserves `StateStatus.None`. It does not mark the state as `Ready`, because no asynchronous command has completed.
@@ -267,3 +280,24 @@ src/
             IExampleApi.cs          IExampleApi
             IExampleService.cs
 ```
+
+## Updates / New Features
+
+### Queued cancellation preserves shared state
+
+Canceling a command before it acquires the update pipeline does **not** update shared service state or raise `StateChanged`. This applies when the command is already canceled or is canceled while waiting behind another command. Its factory is not invoked; only that caller receives an unpublished `Error` result with `ErrorMessage == "Operation canceled."`.
+
+For example, if command A is running and command B is canceled while waiting, observers see A's lifecycle continue as `Busy -> Ready` (or `Busy -> Error` if A fails). They no longer receive an `Error` notification for B while A is still active. Cancellation after a command has acquired the pipeline is unchanged: if its factory throws `OperationCanceledException`, that command publishes `Error`. `IStateService<T>.Empty` remains unchanged.
+
+**Consumer flow change:** code that previously relied on `StateChanged` or `service.State` to learn that a queued command was canceled must instead inspect the `State<T>` returned by that specific `SetAsync` call. For example:
+
+```csharp
+State<MyValue> result = await service.SetAsync(CreateValueAsync, cancellationToken);
+
+if (result is { Status: StateStatus.Error, ErrorMessage: "Operation canceled." })
+{
+    // Handle this request's cancellation; shared service state may still be Busy.
+}
+```
+
+Do not use the canceled call's returned error snapshot as the current service state. Its `Error` status reports that this request was canceled before it started; it does not mean the active transition failed. The result describes that request, while `service.State` and `StateChanged` describe the transition that owns the shared update pipeline. Consumers that previously reacted to shared error notifications for queued cancellations should handle the returned result instead, and continue using shared state for busy indicators and active-transition status.
